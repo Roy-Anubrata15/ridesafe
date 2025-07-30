@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Users collection - allow creation during registration, then restrict access
+    match /users/{userId} {
+      // Allow creation (for registration)
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow read/write if user owns the document OR is admin
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
+    }
+    
+    // Admission forms - users can submit, admins can read/write all
+    match /admissionForms/{formId} {
+      // Anyone authenticated can submit forms
+      allow create: if request.auth != null;
+      
+      // Users can read their own forms, admins can read all
+      allow read: if request.auth != null && 
+        (resource.data.userEmail == request.auth.token.email || isAdmin());
+      
+      // Only admins can update forms (approve/reject)
+      allow write: if isAdmin();
+    }
+    
+    // Admin codes - only admins can access
+    match /adminCodes/{codeId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Change requests - users can submit, admins can read/write all
+    match /changeRequests/{requestId} {
+      // Anyone authenticated can submit requests
+      allow create: if request.auth != null;
+      
+      // Users can read their own requests, admins can read all
+      allow read: if request.auth != null && 
+        (resource.data.userEmail == request.auth.token.email || isAdmin());
+      
+      // Only admins can update requests (approve/reject)
+      allow write: if isAdmin();
+    }
+  }
+} 
